@@ -1,0 +1,36 @@
+{
+  "name": "pomodoro-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "6.31.9",
+    "@neondatabase/serverless": "1.0.1",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "drizzle-orm": "0.44.5",
+    "lucide-react": "0.542.0",
+    "next": "15.5.14",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "server-only": "0.0.1",
+    "tailwind-merge": "3.3.1",
+    "zustand": "5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/node": "22.18.1",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "drizzle-kit": "0.31.4",
+    "tailwindcss": "4.1.12",
+    "typescript": "5.9.2"
+  }
+}
