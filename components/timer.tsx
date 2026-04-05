@@ -86,6 +86,7 @@ export function Timer({
   const [breakInput, setBreakInput] = useState("5");
   const [isPending, startTransition] = useTransition();
   const audioContextRef = useRef<AudioContext | null>(null);
+  const completionKeyRef = useRef<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -145,6 +146,14 @@ export function Timer({
     } as const;
   }
 
+  function getCompletionKey() {
+    if (!sessionStartedAt) {
+      return null;
+    }
+
+    return `${phase}-${sessionStartedAt}`;
+  }
+
   async function playSound(kind: "start" | "focusEnd" | "breakEnd") {
     const AudioCtor =
       window.AudioContext ??
@@ -200,19 +209,34 @@ export function Timer({
     );
   }
 
+  function persistFocusSession(onComplete?: () => void) {
+    const payload = getSessionPayload("focus");
+
+    if (!payload) {
+      onComplete?.();
+      return;
+    }
+
+    startTransition(async () => {
+      await createTimerSessionAction(payload);
+      onComplete?.();
+      router.refresh();
+    });
+  }
+
   useEffect(() => {
     if (!isRunning) return;
     if (elapsedSeconds < targetSeconds) return;
 
+    const completionKey = getCompletionKey();
+    if (completionKey && completionKeyRef.current === completionKey) {
+      return;
+    }
+    completionKeyRef.current = completionKey;
+
     if (pomodoroEnabled && phase === "focus") {
-      const payload = getSessionPayload("focus");
       void playSound("focusEnd");
-      if (payload) {
-        startTransition(async () => {
-          await createTimerSessionAction(payload);
-          router.refresh();
-        });
-      }
+      persistFocusSession();
       completePomodoroCycle({ autoStart: true });
       return;
     }
@@ -224,15 +248,14 @@ export function Timer({
     }
 
     void playSound("focusEnd");
-    stop();
+    persistFocusSession(stop);
   }, [
     completePomodoroCycle,
     elapsedSeconds,
-    getSessionPayload,
     isRunning,
     phase,
     pomodoroEnabled,
-    playSound,
+    router,
     stop,
     targetSeconds,
   ]);
@@ -247,23 +270,14 @@ export function Timer({
   }
 
   async function handleStop() {
+    completionKeyRef.current = getCompletionKey();
+
     if (phase === "break") {
       stop();
       return;
     }
 
-    const payload = getSessionPayload("focus");
-
-    if (!payload) {
-      stop();
-      return;
-    }
-
-    startTransition(async () => {
-      await createTimerSessionAction(payload);
-      stop();
-      router.refresh();
-    });
+    persistFocusSession(stop);
   }
 
   return (
