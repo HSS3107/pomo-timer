@@ -1,7 +1,7 @@
 "use client";
 
 import { Pause, Play, Square } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createTimerSessionAction } from "@/app/actions";
@@ -20,6 +20,40 @@ function formatClock(totalSeconds: number) {
     .padStart(2, "0");
 
   return `${minutes}:${seconds}`;
+}
+
+type SoundTone = {
+  frequency: number;
+  duration: number;
+  delay: number;
+  gain: number;
+};
+
+function playToneSequence(
+  audioContext: AudioContext,
+  tones: SoundTone[],
+  oscillatorType: OscillatorType,
+) {
+  const startAt = audioContext.currentTime + 0.02;
+
+  for (const tone of tones) {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const toneStart = startAt + tone.delay;
+    const toneEnd = toneStart + tone.duration;
+
+    oscillator.type = oscillatorType;
+    oscillator.frequency.setValueAtTime(tone.frequency, toneStart);
+
+    gainNode.gain.setValueAtTime(0.0001, toneStart);
+    gainNode.gain.exponentialRampToValueAtTime(tone.gain, toneStart + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.start(toneStart);
+    oscillator.stop(toneEnd + 0.02);
+  }
 }
 
 export function Timer({
@@ -51,6 +85,7 @@ export function Timer({
   const [focusInput, setFocusInput] = useState("25");
   const [breakInput, setBreakInput] = useState("5");
   const [isPending, startTransition] = useTransition();
+  const audioContextRef = useRef<AudioContext | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -91,21 +126,86 @@ export function Timer({
   const targetSeconds = phase === "focus" ? focusSeconds : breakSeconds;
   const displaySeconds = Math.max(targetSeconds - elapsedSeconds, 0);
 
+  async function playSound(kind: "start" | "focusEnd" | "breakEnd") {
+    const AudioCtor =
+      window.AudioContext ??
+      (window as Window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+
+    if (!AudioCtor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioCtor();
+    }
+
+    const audioContext = audioContextRef.current;
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
+    if (kind === "start") {
+      playToneSequence(
+        audioContext,
+        [
+          { frequency: 392, duration: 0.16, delay: 0, gain: 0.03 },
+          { frequency: 523.25, duration: 0.2, delay: 0.08, gain: 0.04 },
+        ],
+        "sine",
+      );
+      return;
+    }
+
+    if (kind === "focusEnd") {
+      playToneSequence(
+        audioContext,
+        [
+          { frequency: 523.25, duration: 0.22, delay: 0, gain: 0.045 },
+          { frequency: 659.25, duration: 0.24, delay: 0.12, gain: 0.05 },
+          { frequency: 783.99, duration: 0.28, delay: 0.26, gain: 0.055 },
+          { frequency: 1046.5, duration: 0.5, delay: 0.42, gain: 0.06 },
+        ],
+        "triangle",
+      );
+      return;
+    }
+
+    playToneSequence(
+      audioContext,
+      [
+        { frequency: 587.33, duration: 0.22, delay: 0, gain: 0.04 },
+        { frequency: 493.88, duration: 0.18, delay: 0.16, gain: 0.035 },
+        { frequency: 659.25, duration: 0.36, delay: 0.28, gain: 0.045 },
+      ],
+      "sine",
+    );
+  }
+
   useEffect(() => {
     if (!isRunning) return;
     if (elapsedSeconds < targetSeconds) return;
 
-    if (pomodoroEnabled) {
-      completePomodoroCycle();
+    if (pomodoroEnabled && phase === "focus") {
+      void playSound("focusEnd");
+      completePomodoroCycle({ autoStart: true });
       return;
     }
 
+    if (pomodoroEnabled && phase === "break") {
+      void playSound("breakEnd");
+      completePomodoroCycle({ autoStart: false });
+      return;
+    }
+
+    void playSound("focusEnd");
     stop();
   }, [
     completePomodoroCycle,
     elapsedSeconds,
     isRunning,
+    phase,
     pomodoroEnabled,
+    playSound,
     stop,
     targetSeconds,
   ]);
@@ -198,7 +298,15 @@ export function Timer({
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Button
             size="lg"
-            onClick={() => (isRunning ? pause() : start())}
+            onClick={async () => {
+              if (isRunning) {
+                pause();
+                return;
+              }
+
+              await playSound("start");
+              start();
+            }}
             disabled={!activeActivityId || isPending}
           >
             {isRunning ? (

@@ -21,7 +21,7 @@ type TimerStore = {
   start: () => void;
   pause: () => void;
   stop: () => void;
-  completePomodoroCycle: () => void;
+  completePomodoroCycle: (options?: { autoStart?: boolean }) => void;
 };
 
 export const useTimerStore = create<TimerStore>((set, get) => ({
@@ -89,12 +89,17 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
       sessionStartedAt: null,
       phase: "focus",
     }),
-  completePomodoroCycle: () =>
-    set((state) => ({
-      phase: state.phase === "focus" ? "break" : "focus",
-      isRunning: false,
-      startedAt: null,
-      elapsedBeforePause: 0,
-      sessionStartedAt: null,
-    })),
+  completePomodoroCycle: ({ autoStart = false } = {}) =>
+    set((state) => {
+      const nextPhase = state.phase === "focus" ? "break" : "focus";
+      const now = Date.now();
+
+      return {
+        phase: nextPhase,
+        isRunning: autoStart,
+        startedAt: autoStart ? now : null,
+        elapsedBeforePause: 0,
+        sessionStartedAt: autoStart ? now : null,
+      };
+    }),
 }));
