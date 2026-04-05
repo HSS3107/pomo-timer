@@ -8,11 +8,15 @@ type TimerStore = {
   selectedActivityId: string | null;
   pomodoroEnabled: boolean;
   phase: TimerPhase;
+  focusDurationMinutes: number;
+  breakDurationMinutes: number;
   isRunning: boolean;
   startedAt: number | null;
   elapsedBeforePause: number;
   sessionStartedAt: number | null;
   setSelectedActivityId: (activityId: string | null) => void;
+  setFocusDurationMinutes: (minutes: number) => void;
+  setBreakDurationMinutes: (minutes: number) => void;
   togglePomodoro: () => void;
   start: () => void;
   pause: () => void;
@@ -24,11 +28,31 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   selectedActivityId: null,
   pomodoroEnabled: false,
   phase: "focus",
+  focusDurationMinutes: 25,
+  breakDurationMinutes: 5,
   isRunning: false,
   startedAt: null,
   elapsedBeforePause: 0,
   sessionStartedAt: null,
   setSelectedActivityId: (activityId) => set({ selectedActivityId: activityId }),
+  setFocusDurationMinutes: (minutes) =>
+    set({
+      focusDurationMinutes: Math.min(180, Math.max(1, Math.floor(minutes))),
+      isRunning: false,
+      startedAt: null,
+      elapsedBeforePause: 0,
+      sessionStartedAt: null,
+      phase: "focus",
+    }),
+  setBreakDurationMinutes: (minutes) =>
+    set({
+      breakDurationMinutes: Math.min(60, Math.max(1, Math.floor(minutes))),
+      isRunning: false,
+      startedAt: null,
+      elapsedBeforePause: 0,
+      sessionStartedAt: null,
+      phase: "focus",
+    }),
   togglePomodoro: () =>
     set((state) => ({
       pomodoroEnabled: !state.pomodoroEnabled,
