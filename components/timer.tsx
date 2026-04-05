@@ -126,6 +126,25 @@ export function Timer({
   const targetSeconds = phase === "focus" ? focusSeconds : breakSeconds;
   const displaySeconds = Math.max(targetSeconds - elapsedSeconds, 0);
 
+  function getSessionPayload(targetPhase: "focus" | "break") {
+    if (!activeActivityId || !sessionStartedAt) {
+      return null;
+    }
+
+    const effectiveStartedAt = new Date(sessionStartedAt);
+    const effectiveEndedAt = new Date(sessionStartedAt + elapsedMs);
+    const durationSeconds = Math.max(1, Math.floor(elapsedMs / 1000));
+
+    return {
+      activityId: activeActivityId,
+      startedAt: effectiveStartedAt.toISOString(),
+      endedAt: effectiveEndedAt.toISOString(),
+      durationSeconds,
+      phase: targetPhase,
+      source: pomodoroEnabled ? "pomodoro" : "timer",
+    } as const;
+  }
+
   async function playSound(kind: "start" | "focusEnd" | "breakEnd") {
     const AudioCtor =
       window.AudioContext ??
@@ -186,7 +205,14 @@ export function Timer({
     if (elapsedSeconds < targetSeconds) return;
 
     if (pomodoroEnabled && phase === "focus") {
+      const payload = getSessionPayload("focus");
       void playSound("focusEnd");
+      if (payload) {
+        startTransition(async () => {
+          await createTimerSessionAction(payload);
+          router.refresh();
+        });
+      }
       completePomodoroCycle({ autoStart: true });
       return;
     }
@@ -202,6 +228,7 @@ export function Timer({
   }, [
     completePomodoroCycle,
     elapsedSeconds,
+    getSessionPayload,
     isRunning,
     phase,
     pomodoroEnabled,
@@ -220,24 +247,20 @@ export function Timer({
   }
 
   async function handleStop() {
-    if (!activeActivityId || !sessionStartedAt) {
+    if (phase === "break") {
       stop();
       return;
     }
 
-    const effectiveStartedAt = new Date(sessionStartedAt);
-    const effectiveEndedAt = new Date(sessionStartedAt + elapsedMs);
-    const durationSeconds = Math.max(1, Math.floor(elapsedMs / 1000));
+    const payload = getSessionPayload("focus");
+
+    if (!payload) {
+      stop();
+      return;
+    }
 
     startTransition(async () => {
-      await createTimerSessionAction({
-        activityId: activeActivityId,
-        startedAt: effectiveStartedAt.toISOString(),
-        endedAt: effectiveEndedAt.toISOString(),
-        durationSeconds,
-        phase,
-        source: pomodoroEnabled ? "pomodoro" : "timer",
-      });
+      await createTimerSessionAction(payload);
       stop();
       router.refresh();
     });
@@ -328,7 +351,7 @@ export function Timer({
             disabled={elapsedSeconds === 0 || isPending}
           >
             <Square className="mr-2 h-4 w-4" />
-            Stop & save
+            {phase === "break" ? "Stop break" : "Stop & save"}
           </Button>
         </div>
       </div>
