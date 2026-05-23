@@ -86,6 +86,7 @@ export function Timer({
   const [breakInput, setBreakInput] = useState("5");
   const [isPending, startTransition] = useTransition();
   const audioContextRef = useRef<AudioContext | null>(null);
+  const focusFinishedAudioRef = useRef<HTMLAudioElement | null>(null);
   const completionKeyRef = useRef<string | null>(null);
   const router = useRouter();
 
@@ -155,6 +156,24 @@ export function Timer({
   }
 
   async function playSound(kind: "start" | "focusEnd" | "breakEnd") {
+    if (kind === "focusEnd") {
+      try {
+        if (!focusFinishedAudioRef.current) {
+          const audio = new Audio("/sounds/focus-finished.mp3");
+          audio.preload = "auto";
+          audio.volume = 0.9;
+          focusFinishedAudioRef.current = audio;
+        }
+
+        const audio = focusFinishedAudioRef.current;
+        audio.currentTime = 0;
+        await audio.play();
+        return;
+      } catch {
+        // Fall back to the generated chime if browser playback is blocked.
+      }
+    }
+
     const AudioCtor =
       window.AudioContext ??
       (window as Window & { webkitAudioContext?: typeof AudioContext })
